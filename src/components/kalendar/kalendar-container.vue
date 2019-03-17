@@ -5,7 +5,10 @@
         <slot name="navigation-space">
           <div class="nav-wrapper">
             <button @click="previousWeek()" class="chevron left"></button>
-            <div v-if="calendar_options.view_type === 'Month' && !!calendar_options.current_week">
+            <div
+                    @click.prevent="pickCurrentDay"
+                    v-if="calendar_options.view_type === 'Month' && !!calendar_options.current_week && !pickingCurrentDay"
+                    style="cursor: pointer">
               <slot name="first-date" :date="startOfWeek(calendar_options.current_week[0].date)">
                 <span>{{ calendar_options.current_week[0].date | normalizeDate('MMM DD') }}</span>
               </slot>
@@ -14,11 +17,12 @@
                 <span>{{ calendar_options.current_week[0].date | normalizeDate('MMM DD, YYYY') }}</span>
               </slot>
             </div>
-            <div v-else>
+            <div v-else-if="!pickingCurrentDay">
               <slot name="current-date" :date="calendar_options.current_day">
                 <span>{{ calendar_options.current_day | normalizeDate('DD MMM, YYYY') }}</span>
               </slot>
             </div>
+            <el-date-picker v-show="pickingCurrentDay" ref="datePicker" v-model="calendar_options.current_day"></el-date-picker>
             <button @click="nextWeek()" class="chevron"></button>
           </div>
         </slot>
@@ -133,10 +137,12 @@ export default {
     hours: [],
     new_appointment: {},
     scrollable: true,
+    pickingCurrentDay: false
   }),
   computed: {
     hourParts() {
-      return (60 / this.calendar_options.split_value) * 24;
+      //On fait du 7h-20h
+      return (60 / this.calendar_options.split_value) * 13;
     },
     calendar_options: {
       get() {
@@ -189,7 +195,8 @@ export default {
     let y = today.getFullYear(),
       m = today.getMonth(),
       d = today.getDate();
-    for (let i = 0; i <= 23; i++) {
+    // Hardcoded: change later using config :/
+    for (let i = 7; i <= 20; i++) {
       visible_hours.push(new Date(y, m, d, i, 0, 0));
     }
     this.hours = visible_hours;
@@ -203,7 +210,6 @@ export default {
       enumerable: true,
       get: () => this.calendar_options,
     })
-    console.log('Providers:', provider);
     return provider;
   },
   methods: {
@@ -212,7 +218,9 @@ export default {
       let date = new Date(this.calendar_options.current_day);
       date.setHours(0, 0, 0, 0);
       let _days = [];
-      let start = this.calendar_options.view_type === 'Month' ? startOfWeek(date) : format(date);
+      let start = this.calendar_options.view_type === 'Month' ? this.startOfWeek(date) : format(date);
+      //On commence à 7h
+      start.setHours(7,0,0,0);
       let num_of_days = this.calendar_options.view_type === 'Month' ? 7 : 1;
       for (let i = 0; i < num_of_days; i++) {
         let _date = addDays(start, i);
@@ -236,9 +244,10 @@ export default {
           hasExistingAppointments.forEach(appointment => {
             let { from, to} = appointment;
 
+            //console.log('Treating appointments: time=' + format(from) + ',' + format(to));
             let target_hour_from = payload.date_hours.find(hour => getTime(hour.value) === getTime(from));
             let target_hour_to = payload.date_hours.find(hour => getTime(hour.value) === getTime(to));
-            
+
             if (!target_hour_from || !target_hour_to) { //there's a chance user selected last cell
               let last_hour_index = payload.date_hours.length - 1; //that's what we checkin here
               let start_is_midnight = from.getHours() + from.getMinutes() === 0;
@@ -250,7 +259,7 @@ export default {
                 target_hour_to = payload.date_hours[last_hour_index];
                 target_hour_to = { ...target_hour_to, ['index']: target_hour_to.index + 1}; //so we take care of the -1 later
               }
-            } 
+            }
 
             if (!target_hour_from || !target_hour_to) return; //and if we just can't find it, we return
 
@@ -288,18 +297,20 @@ export default {
       )
     },
     startOfWeek(value) {
-      return startOfWeek(value);
+      return startOfWeek(value, {weekStartsOn: 1});
     },
     endOfWeek(value) {
-      return endOfWeek(value);
+      return endOfWeek(value, {weekStartsOn: 1});
     },
     previousWeek() {
       this.calendar_options.current_day = this.calendar_options.view_type === 'Month' ? addWeeks(this.calendar_options.current_day, -1) : addDays(this.calendar_options.current_day, -1);
-      this.generateCalendarProperties();
+      //this.generateCalendarProperties();
+      //this.$emit('currentDayChanged', this.calendar_options.current_day);
     },
     nextWeek() {
       this.calendar_options.current_day = this.calendar_options.view_type === 'Month' ? addWeeks(this.calendar_options.current_day, 1) : addDays(this.calendar_options.current_day, 1);
-      this.generateCalendarProperties();
+      //this.generateCalendarProperties();
+      //this.$emit('currentDayChanged', this.calendar_options.current_day);
     },
     generateCalendarProperties() {
       //this.$set(this.calendar_options, 'existing_appointments', null);
@@ -311,6 +322,10 @@ export default {
     },
     getHours(start, end) {
       return `${format(start, 'HH:mm')} - ${format(end, 'HH:mm')}`;
+    },
+    pickCurrentDay() {
+      this.pickingCurrentDay = true;
+      this.$refs.datePicker.focus();
     },
   },
   watch: {
@@ -326,7 +341,11 @@ export default {
       if (60 % parseInt(val) === 0) this.generateCalendarProperties();
     },
     current_day(val) {
-      if (val) this.generateCalendarProperties();
+      if (val) {
+        this.generateCalendarProperties();
+        this.pickingCurrentDay = false;
+        this.$emit('currentDayChanged', this.calendar_options.current_day);
+      }
     }
   },
 }
