@@ -141,8 +141,8 @@ export default {
   }),
   computed: {
     hourParts() {
-      //On fait du 7h-20h
-      return (60 / this.calendar_options.split_value) * 13;
+      //On fait du 7h-24h
+      return (60 / this.calendar_options.split_value) * 17;
     },
     calendar_options: {
       get() {
@@ -196,7 +196,7 @@ export default {
       m = today.getMonth(),
       d = today.getDate();
     // Hardcoded: change later using config :/
-    for (let i = 7; i <= 20; i++) {
+    for (let i = 7; i <= 23; i++) {
       visible_hours.push(new Date(y, m, d, i, 0, 0));
     }
     this.hours = visible_hours;
